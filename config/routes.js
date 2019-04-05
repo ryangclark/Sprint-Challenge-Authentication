@@ -1,7 +1,7 @@
 const axios = require('axios');
 const bcrypt = require('bcryptjs');
 
-const { authenticate } = require('../auth/authenticate');
+const { authenticate, generateToken } = require('../auth/authenticate');
 const userModel = require('./user-model');
 
 module.exports = server => {
@@ -24,9 +24,13 @@ function register(req, res) {
       example: { username: 'newusername', password: 'superstrongpassword' }
     });
   }
+  const newUser = {
+    username: req.body.username,
+    password: bcrypt.hashSync(req.body.password, 12)
+  };
   userModel
-    .addUser(req.body)
-    .then(newUser => res.status(201).json(newUser))
+    .addUser(newUser)
+    .then(addedUser => res.status(201).json(addedUser))
     .catch(error => handleServerError(res, error));
 }
 
@@ -38,19 +42,18 @@ function login(req, res) {
     });
   }
   userModel
-    .getUserByFilter({ id: req.body.username })
+    .getUserAndPass({ username: req.body.username })
     .first()
     .then(storedUser => {
-      if (!storedUser) {
-        return res.status(401).json({ message: 'Invalid Credentials' });
-      } else if (bcrypt.compareSync(req.body.password, storedUser.password)) {
-        res
-          .status(200)
-          .json({
-            token: generateToken(req.body),
-            userId: storedUser.id,
-            username: storedUser.username
-          });
+      if (
+        storedUser &&
+        bcrypt.compareSync(req.body.password, storedUser.password)
+      ) {
+        res.status(200).json({
+          token: generateToken(req.body),
+          userId: storedUser.id,
+          username: storedUser.username
+        });
       } else {
         return res.status(401).json({ message: 'Invalid Credentials' });
       }
